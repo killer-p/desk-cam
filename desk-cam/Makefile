@@ -16,8 +16,21 @@ LIBS += -lrockit_tiny
 LIBS += -L$(DESK_CAM_ROOT)/media/mpp/release_mpp_rv1106_arm-rockchip830-linux-uclibcgnueabihf/lib
 LIBS += -lrockchip_mpp
 
+# add isp lib
+INC += -I$(DESK_CAM_ROOT)/media/isp/release_camera_engine_rkaiq_rv1106_arm-rockchip830-linux-uclibcgnueabihf/include/rkaiq/uAPI2
+INC += -I$(DESK_CAM_ROOT)/media/isp/release_camera_engine_rkaiq_rv1106_arm-rockchip830-linux-uclibcgnueabihf/include/rkaiq/common/
+INC += -I$(DESK_CAM_ROOT)/media/isp/release_camera_engine_rkaiq_rv1106_arm-rockchip830-linux-uclibcgnueabihf/include/rkaiq/xcore/
+INC += -I$(DESK_CAM_ROOT)/media/isp/release_camera_engine_rkaiq_rv1106_arm-rockchip830-linux-uclibcgnueabihf/include/rkaiq/
+INC += -I$(DESK_CAM_ROOT)/media/isp/release_camera_engine_rkaiq_rv1106_arm-rockchip830-linux-uclibcgnueabihf/include/rkaiq/algos
+INC += -I$(DESK_CAM_ROOT)/media/isp/release_camera_engine_rkaiq_rv1106_arm-rockchip830-linux-uclibcgnueabihf/include/rkaiq/iq_parser/
+INC += -I$(DESK_CAM_ROOT)/media/isp/release_camera_engine_rkaiq_rv1106_arm-rockchip830-linux-uclibcgnueabihf/include/rkaiq/iq_parser_v2/
+LIBS += -L$(DESK_CAM_ROOT)/media/isp/release_camera_engine_rkaiq_rv1106_arm-rockchip830-linux-uclibcgnueabihf/lib
+LIBS += -lrkaiq
+
 all:
-	mkdir $(DESK_CAM_OUT)
+	if [ ! -d "$(DESK_CAM_OUT)"]; then \
+		mkdir $(DESK_CAM_OUT); \
+	fi
 	bear -- $(COMPILER) -o $(DESK_CAM_OUT)/desk-cam $(SRC) $(INC) $(LIBS)
 
 clean:
