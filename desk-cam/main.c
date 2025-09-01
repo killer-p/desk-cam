@@ -1,7 +1,10 @@
 #include "rk_aiq_comm.h"
+#include "rk_comm_rc.h"
+#include "rk_comm_venc.h"
 #include "rk_comm_vi.h"
 #include "rk_comm_video.h"
 #include "rk_mpi_sys.h"
+#include "rk_mpi_venc.h"
 #include "rk_mpi_vi.h"
 #include "rk_type.h"
 #include "stdio.h"
@@ -10,12 +13,72 @@
 #include <rk_aiq_user_api2_sysctl.h>
 #include <stdbool.h>
 
-int vi_dev_id = 0;
-int vi_pipe_id = 0;
-int vi_chn_id = 0;
+#define WIDTH 1920
+#define HEIGH 1080
+#define PIXEL_FMT RK_FMT_YUV420SP
+
+int venc_chn_id = 0;
+#define RK_ALIGN(x, a) (((x) + (a) - 1) & ~((a) - 1))
+#define RK_ALIGN_2(x) RK_ALIGN(x, 2)
+
+int start_venc(void) {
+  VENC_RECV_PIC_PARAM_S recv_param = {0};
+  recv_param.s32RecvPicNum = -1;
+  RK_MPI_VENC_StartRecvFrame(venc_chn_id, &recv_param);
+  return 0;
+}
+
+int init_venc(void) {
+  VENC_CHN_ATTR_S attr = {0};
+  VENC_RC_PARAM_S rc_param = {0};
+  attr.stRcAttr.enRcMode = VENC_RC_MODE_H264CBR;
+  attr.stRcAttr.stH264Cbr.u32Gop = 50;
+  attr.stRcAttr.stH264Cbr.u32BitRate = 4 * 1024;
+  attr.stRcAttr.stH264Cbr.fr32DstFrameRateDen = 1;
+  attr.stRcAttr.stH264Cbr.fr32DstFrameRateNum = 30;
+  attr.stRcAttr.stH264Cbr.u32SrcFrameRateDen = 1;
+  attr.stRcAttr.stH264Cbr.u32SrcFrameRateNum = 30;
+
+  attr.stVencAttr.enType = RK_VIDEO_ID_AVC;
+  attr.stVencAttr.enPixelFormat = PIXEL_FMT;
+  attr.stVencAttr.u32Profile = 100;
+  attr.stVencAttr.u32MaxPicWidth = WIDTH;
+  attr.stVencAttr.u32MaxPicHeight = HEIGH;
+  attr.stVencAttr.u32PicWidth = WIDTH;
+  attr.stVencAttr.u32PicHeight = HEIGH;
+  attr.stVencAttr.u32VirWidth = WIDTH;
+  attr.stVencAttr.u32VirHeight = HEIGH;
+  attr.stVencAttr.u32StreamBufCnt = 3;
+  attr.stVencAttr.u32BufSize = WIDTH * HEIGH * 3 / 2;
+
+  attr.stGopAttr.enGopMode = VENC_GOPMODE_NORMALP;
+  if (RK_SUCCESS != RK_MPI_VENC_CreateChn(venc_chn_id, &attr)) {
+    printf("create venc chn fail\n");
+    return -1;
+  }
+
+  rc_param.stParamH264.u32MinQp = 10;
+  rc_param.stParamH264.u32MaxQp = 51;
+  rc_param.stParamH264.u32MinIQp = 10;
+  rc_param.stParamH264.u32MaxIQp = 51;
+  rc_param.stParamH264.u32FrmMinQp = 28;
+  rc_param.stParamH264.u32FrmMinIQp = 28;
+
+  if (RK_SUCCESS != RK_MPI_VENC_SetRcParam(venc_chn_id, &rc_param)) {
+    printf("set rc param fail\n");
+    return -1;
+  }
+
+  return 0;
+}
+
+int deinit_venc(void) {
+  RK_MPI_VENC_StopRecvFrame(venc_chn_id);
+  RK_MPI_VENC_DestroyChn(venc_chn_id);
+}
+
 const char *iq_file_path = "/etc/iqfiles/";
 rk_aiq_working_mode_t hdr_mode = RK_AIQ_WORKING_MODE_NORMAL;
-
 rk_aiq_sys_ctx_t *aiq_ctx;
 int init_aiq(void) {
 
@@ -46,6 +109,9 @@ int stop_aiq(void) {
   return 0;
 }
 
+int vi_dev_id = 0;
+int vi_pipe_id = 0;
+int vi_chn_id = 0;
 int init_vi(void) {
   VI_DEV_ATTR_S dev_attr = {0};
   int ret;
@@ -90,16 +156,56 @@ int deinit_vi(void) {
   return 0;
 }
 
+int vi_bind_venc(void) {
+  MPP_CHN_S stSrcChn, stDestChn;
+  // bind vi to venc
+  stSrcChn.enModId = RK_ID_VI;
+  stSrcChn.s32DevId = vi_dev_id;
+  stSrcChn.s32ChnId = vi_chn_id;
+
+  stDestChn.enModId = RK_ID_VENC;
+  stDestChn.s32DevId = 0;
+  stDestChn.s32ChnId = 0;
+
+  RK_MPI_SYS_Bind(&stSrcChn, &stDestChn);
+  return 0;
+}
+
+int vi_unbind_venc(void) {
+  MPP_CHN_S stSrcChn, stDestChn;
+  stSrcChn.enModId = RK_ID_VI;
+  stSrcChn.s32DevId = vi_dev_id;
+  stSrcChn.s32ChnId = vi_chn_id;
+
+  stDestChn.enModId = RK_ID_VENC;
+  stDestChn.s32DevId = 0;
+  stDestChn.s32ChnId = 0;
+
+  RK_MPI_SYS_UnBind(&stSrcChn, &stDestChn);
+  return 0;
+}
+
 int main() {
+  char input = 0;
   printf("hello world\n");
 
   RK_MPI_SYS_Init();
   init_aiq();
   run_aiq();
   init_vi();
+  init_venc();
+  // do some things
+  vi_bind_venc();
+  start_venc();
+  while (input != 'q') {
+    printf("input q to quit\n");
+    scanf("%c", &input);
+  }
+  vi_unbind_venc();
+  deinit_venc();
+  deinit_vi();
   stop_aiq();
   deinit_aiq();
-  deinit_vi();
   RK_MPI_SYS_Exit();
   return 0;
 }
