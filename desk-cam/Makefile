@@ -27,6 +27,11 @@ INC += -I$(DESK_CAM_ROOT)/media/isp/release_camera_engine_rkaiq_rv1106_arm-rockc
 LIBS += -L$(DESK_CAM_ROOT)/media/isp/release_camera_engine_rkaiq_rv1106_arm-rockchip830-linux-uclibcgnueabihf/lib
 LIBS += -lrkaiq
 
+# add rtsp lib
+INC += -I$(DESK_CAM_ROOT)/media/common_algorithm/common_algorithm/misc/include
+LIBS += -L$(DESK_CAM_ROOT)/media/common_algorithm/common_algorithm/misc/lib/arm-rockchip830-linux-uclibcgnueabihf/
+LIBS += -lrtsp
+
 all:
 	if [ ! -d "$(DESK_CAM_OUT)"]; then \
 		mkdir $(DESK_CAM_OUT); \

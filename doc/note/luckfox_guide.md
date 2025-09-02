@@ -67,7 +67,7 @@ sudo systemctl restart nfs-server
 
 在pico 端，挂载nfs 命令如下：
 ```bash
-mount -t nfs 172.32.0.101:/home/prx/nfs /mnt
+mount -t nfs -o nolock 172.32.0.101:/home/prx/nfs /mnt/nfs
 ```
 
 如果windows 也想挂载该nfs 目录，也可以按以下步骤：
