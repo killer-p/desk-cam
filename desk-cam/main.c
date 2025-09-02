@@ -201,6 +201,8 @@ int dump_vi_frame(void) {
     RK_LOGE("get vi frame fail 0x%x", ret);
     return -1;
   }
+  RK_LOGI("private data=%d, calculate size = %d", info.stVFrame.u64PrivateData,
+          1920 * 1080 * 3 / 2);
   data = RK_MPI_MB_Handle2VirAddr(info.stVFrame.pMbBlk);
   if (0 == dump_file(data, info.stVFrame.u64PrivateData))
     RK_LOGI("dump vi frame success ");
@@ -245,6 +247,7 @@ int init_rtsp(void) {
   rtsp_handle = create_rtsp_demo(rtsp_port_id);
   session_handle = rtsp_new_session(rtsp_handle, "/live/0");
   rtsp_set_video(session_handle, RTSP_CODEC_ID_VIDEO_H264, NULL, 0);
+  rtsp_sync_video_ts(session_handle, rtsp_get_reltime(), rtsp_get_ntptime());
   return 0;
 }
 
@@ -257,7 +260,7 @@ int venc_data_process(void) {
   int ret = 0;
   VENC_STREAM_S stream;
   void *data;
-  int q = 10;
+  int q = 1000;
 
   stream.pstPack = malloc(sizeof(VENC_PACK_S));
   while (q--) {
@@ -267,7 +270,9 @@ int venc_data_process(void) {
       continue;
     }
     data = RK_MPI_MB_Handle2VirAddr(stream.pstPack->pMbBlk);
-
+    rtsp_tx_video(session_handle, data, stream.pstPack->u32Len,
+                  stream.pstPack->u64PTS);
+    rtsp_do_event(rtsp_handle);
     RK_MPI_VENC_ReleaseStream(venc_chn_id, &stream);
   }
   free(stream.pstPack);
