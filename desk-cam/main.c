@@ -3,10 +3,13 @@
 #include "rk_comm_venc.h"
 #include "rk_comm_vi.h"
 #include "rk_comm_video.h"
+#include "rk_comm_vpss.h"
+#include "rk_common.h"
 #include "rk_mpi_mb.h"
 #include "rk_mpi_sys.h"
 #include "rk_mpi_venc.h"
 #include "rk_mpi_vi.h"
+#include "rk_mpi_vpss.h"
 #include "rk_type.h"
 #include "rtsp_demo.h"
 #include "stdio.h"
@@ -210,10 +213,39 @@ int dump_vi_frame(void) {
   return 0;
 }
 
-int vi_bind_venc(void) {
+int vi_bind_vpss(void) {
   MPP_CHN_S stSrcChn, stDestChn;
   // bind vi to venc
   stSrcChn.enModId = RK_ID_VI;
+  stSrcChn.s32DevId = vi_dev_id;
+  stSrcChn.s32ChnId = vi_chn_id;
+
+  stDestChn.enModId = RK_ID_VPSS;
+  stDestChn.s32DevId = 0;
+  stDestChn.s32ChnId = 0;
+
+  RK_MPI_SYS_Bind(&stSrcChn, &stDestChn);
+  return 0;
+}
+
+int vi_unbind_vpss(void) {
+  MPP_CHN_S stSrcChn, stDestChn;
+  stSrcChn.enModId = RK_ID_VI;
+  stSrcChn.s32DevId = vi_dev_id;
+  stSrcChn.s32ChnId = vi_chn_id;
+
+  stDestChn.enModId = RK_ID_VPSS;
+  stDestChn.s32DevId = 0;
+  stDestChn.s32ChnId = 0;
+
+  RK_MPI_SYS_UnBind(&stSrcChn, &stDestChn);
+  return 0;
+}
+
+int vpss_bind_venc(void) {
+  MPP_CHN_S stSrcChn, stDestChn;
+  // bind vi to venc
+  stSrcChn.enModId = RK_ID_VPSS;
   stSrcChn.s32DevId = vi_dev_id;
   stSrcChn.s32ChnId = vi_chn_id;
 
@@ -225,9 +257,9 @@ int vi_bind_venc(void) {
   return 0;
 }
 
-int vi_unbind_venc(void) {
+int vpss_unbind_venc(void) {
   MPP_CHN_S stSrcChn, stDestChn;
-  stSrcChn.enModId = RK_ID_VI;
+  stSrcChn.enModId = RK_ID_VPSS;
   stSrcChn.s32DevId = vi_dev_id;
   stSrcChn.s32ChnId = vi_chn_id;
 
@@ -280,6 +312,59 @@ int venc_data_process(void) {
   return 0;
 }
 
+int vpss_group = 0;
+int vpss_chn_id = 0;
+int init_vpss(void) {
+  int ret;
+  VPSS_GRP_ATTR_S grp_attr = {0};
+  VPSS_CHN_ATTR_S chn_attr = {0};
+
+  grp_attr.u32MaxW = WIDTH;
+  grp_attr.u32MaxH = HEIGH;
+  grp_attr.enPixelFormat = PIXEL_FMT;
+  grp_attr.stFrameRate.s32SrcFrameRate = -1;
+  grp_attr.stFrameRate.s32DstFrameRate = -1;
+  grp_attr.enCompressMode = COMPRESS_MODE_NONE;
+
+  ret = RK_MPI_VPSS_CreateGrp(vpss_group, &grp_attr);
+  if (ret != RK_SUCCESS) {
+    RK_LOGE("vpss create group fail 0x%x", ret);
+    return -1;
+  }
+  chn_attr.enChnMode = VPSS_CHN_MODE_PASSTHROUGH;
+  chn_attr.enDynamicRange = DYNAMIC_RANGE_SDR8;
+  chn_attr.enPixelFormat = PIXEL_FMT;
+  chn_attr.stFrameRate.s32SrcFrameRate = -1;
+  chn_attr.stFrameRate.s32DstFrameRate = -1;
+  chn_attr.u32Width = WIDTH;
+  chn_attr.u32Height = HEIGH;
+  chn_attr.enCompressMode = COMPRESS_MODE_NONE;
+
+  ret = RK_MPI_VPSS_SetChnAttr(vpss_group, vpss_chn_id, &chn_attr);
+  if (ret != RK_SUCCESS) {
+    RK_LOGE("fail to set chn %d ret 0x%x", vpss_chn_id, ret);
+    return -1;
+  }
+
+  ret = RK_MPI_VPSS_EnableChn(vpss_group, vpss_chn_id);
+  if (ret != RK_SUCCESS) {
+    RK_LOGE("start chn %d fail 0x%x", vpss_chn_id, ret);
+    return -1;
+  }
+
+  ret = RK_MPI_VPSS_StartGrp(vpss_group);
+  if (ret != RK_SUCCESS) {
+    RK_LOGE("fail to start group");
+  }
+  return ret;
+}
+
+int deinit_vpss(void) {
+  RK_MPI_VPSS_StopGrp(vpss_group);
+  RK_MPI_VPSS_DestroyGrp(vpss_group);
+  return 0;
+}
+
 int main() {
   char input = 0;
   printf("hello world\n");
@@ -290,16 +375,20 @@ int main() {
   run_aiq();
   init_vi();
   dump_vi_frame();
+  init_vpss();
   init_venc();
   // do some things
-  vi_bind_venc();
+  vi_bind_vpss();
+  vpss_bind_venc();
   venc_data_process();
   while (input != 'q') {
     printf("input q to quit\n");
     scanf("%c", &input);
   }
-  vi_unbind_venc();
+  vpss_unbind_venc();
+  vi_unbind_vpss();
   deinit_venc();
+  deinit_vpss();
   deinit_vi();
   stop_aiq();
   deinit_aiq();

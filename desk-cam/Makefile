@@ -10,7 +10,8 @@ LIBS:=
 # add rockit lib
 INC += -I$(DESK_CAM_ROOT)/media/rockit/rockit/mpi/sdk/include/
 LIBS += -L$(DESK_CAM_ROOT)/media/rockit/rockit/lib/lib32/
-LIBS += -lrockit_tiny
+LIBS += -L$(DESK_CAM_ROOT)/media/rga/release_rga_rv1106_arm-rockchip830-linux-uclibcgnueabihf/lib
+LIBS += -lrockit -lrga
 
 # add mpp lib
 LIBS += -L$(DESK_CAM_ROOT)/media/mpp/release_mpp_rv1106_arm-rockchip830-linux-uclibcgnueabihf/lib
